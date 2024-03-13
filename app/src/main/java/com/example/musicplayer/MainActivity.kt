@@ -1,25 +1,32 @@
 package com.example.musicplayer
 
+import android.Manifest
 import android.media.MediaPlayer
-import androidx.appcompat.app.AppCompatActivity
+import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
 import android.widget.Button
 import android.widget.SeekBar
 import android.widget.TextView
 import android.widget.Toast
+import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.Observer
 import androidx.lifecycle.ViewModelProvider
+import java.io.File
 import java.util.concurrent.TimeUnit
 
 // MainActivity class
 class MainActivity : AppCompatActivity() {
 
+    //Permission manager
+    private lateinit var permissionManager: PermissionManager
+
     // Initializing the ViewModel
     private lateinit var viewModel: MusicViewModel
 
     // Array of songs
-    private val songs = arrayOf(R.raw.club_music_50, R.raw.rock_music_60)
+    private lateinit var songs: Array<String>
+
     // Index to keep track of the current song
     private var currentSongIndex = 0
 
@@ -42,6 +49,13 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
+        //Instantiate the PermissionManager
+        permissionManager = PermissionManager(this)
+        val permissions = arrayOf(
+            Manifest.permission.READ_EXTERNAL_STORAGE
+        )
+        permissionManager.requestPermissions(permissions)
+
         // Instantiate the ViewModel
         viewModel = ViewModelProvider(this).get(MusicViewModel::class.java)
 
@@ -59,6 +73,17 @@ class MainActivity : AppCompatActivity() {
 
         time_txt = findViewById(R.id.time_left_text)
         seekBar = findViewById(R.id.seek_bar)
+
+        //Find music files in 'Music' directory
+        val musicDirectory = File("/storage/emulated/0/Music")
+        val files = musicDirectory.listFiles()
+        val songPaths = ArrayList<String>()
+        files?.forEach { file ->
+            if (file.isFile && file.name.endsWith(".mp3")) {
+                songPaths.add(file.absolutePath)
+            }
+        }
+        songs = songPaths.toArray(arrayOf<String>())
 
         // Initialize the MediaPlayer with the first song
         initializeMediaPlayer()
@@ -117,8 +142,17 @@ class MainActivity : AppCompatActivity() {
 
     // Function to initialize the MediaPlayer and set the track name in the ViewModel
     private fun initializeMediaPlayer() {
-        mediaPlayer = MediaPlayer.create(this, songs[currentSongIndex])
-        viewModel.setTrackName("" + resources.getResourceEntryName(songs[currentSongIndex]))
+        if (songs.isEmpty()) {
+            Toast.makeText(this, "No songs found", Toast.LENGTH_SHORT).show()
+            return
+        } else {
+            mediaPlayer = MediaPlayer().apply {
+                setDataSource(applicationContext, Uri.parse(songs[currentSongIndex]))
+                prepare()
+            }
+            val fileName = File(songs[currentSongIndex]).nameWithoutExtension
+            viewModel.setTrackName(fileName)
+        }
     }
 
     // Function to change the current song and update the MediaPlayer
@@ -149,4 +183,10 @@ class MainActivity : AppCompatActivity() {
             handler.postDelayed(this, 100)
         }
     }
+
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        permissionManager.onRequestPermissionsResult(requestCode, permissions,grantResults)
+    }
 }
+
